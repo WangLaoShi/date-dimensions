@@ -10,21 +10,96 @@ pip install "date-dimensions[cn]"  # 可选，中国大陆节假日和调休
 pip install "date-dimensions[tz]"  # 可选，供缺少系统时区数据的环境使用
 ```
 
-## 使用
+## 解析时间和提取字段
 
 ```python
-from date_dimensions import time_features, time_features_excel
+from datetime import datetime
 
-row = time_features(1700000000123, unit="ms")
-print(row["year"], row["month"], row["day"])  # 2023 11 15
+from date_dimensions import time_features
 
-row = time_features_excel("2024-02-12 14:35:20", include_cn_calendar=True)
-print(row["is_holiday"])   # 是
-print(row["is_workday"])   # 否
-print(row["15min_floor"])  # 2024-02-12 14:30:00
+seconds = time_features(1700000000, unit="s")
+millis = time_features(1700000000123, unit="ms")
+utc = time_features("2023-11-14T22:13:20.123Z")
+local = time_features(datetime(2023, 11, 15, 6, 13, 20, 123000))
+
+assert millis == utc == local
+assert seconds["dt"].microsecond == 0
+
+fields = ("year", "month", "day", "hour", "minute", "second")
+print(*(millis[field] for field in fields))  # 2023 11 15 6 13 20
 ```
 
-两个函数均返回相同字段。接受数字时间戳（需指定 `unit="s"` 或 `unit="ms"`）、ISO 日期时间字符串或 `datetime`。带时区的输入转换为上海时间，无时区输入按上海本地时间解释。
+数字时间戳须指定 `unit="s"` 或 `unit="ms"`。带时区的输入转换为上海时间，无时区的字符串和 `datetime` 按上海本地时间解释。
+
+## 批量提取与周报分组
+
+```python
+from collections import Counter
+
+from date_dimensions import time_features
+
+events = ["2020-12-31 23:50:00", "2021-01-01 14:35:20", "2021-01-04 08:00:00"]
+rows = [time_features(event) for event in events]
+
+counts = Counter((row["iso_year"], row["weekofyear"]) for row in rows)
+assert counts == {(2020, 53): 2, (2021, 1): 1}
+
+row = rows[1]
+print(row["hour_floor"])    # 2021-01-01 14:00:00+08:00
+print(row["15min_floor"])   # 2021-01-01 14:30:00+08:00
+print(row["ten_day_period"])  # 上旬
+```
+
+## 查询节假日与补班
+
+先安装 `date-dimensions[cn]`，再开启日历查询。
+
+```python
+from date_dimensions import time_features_excel
+
+holiday = time_features_excel("2024-02-12", include_cn_calendar=True)
+makeup = time_features_excel("2024-02-18", include_cn_calendar=True)
+
+assert holiday["is_holiday"] == "是"
+assert holiday["is_workday"] == "否"
+assert makeup["is_weekend"] == "是"
+assert makeup["is_workday"] == "是"
+assert makeup["is_makeup_workday"] == "是"
+```
+
+## 写入 Excel
+
+如需直接生成 `.xlsx`，可额外安装 `openpyxl`（`pip install openpyxl`）。只获取字典时直接调用 `time_features_excel()` 即可。
+
+```python
+from openpyxl import Workbook
+
+from date_dimensions import time_features_excel
+
+rows = [
+    time_features_excel("2024-02-12 14:35:20"),
+    time_features_excel("2024-02-18 09:05:00"),
+]
+columns = list(rows[0])
+workbook = Workbook()
+sheet = workbook.active
+sheet.title = "日期维度"
+sheet.append(columns)
+for row in rows:
+    sheet.append([row[column] for column in columns])
+
+for field in ("day_progress", "week_progress", "month_progress"):
+    column_index = columns.index(field) + 1
+    for row_index in range(2, sheet.max_row + 1):
+        sheet.cell(row=row_index, column=column_index).number_format = "0.00%"
+
+sheet.auto_filter.ref = sheet.dimensions
+workbook.save("date_dimensions.xlsx")
+```
+
+## 返回字段
+
+两个函数均返回以下 35 个字段。普通版的标记为 `1` 或 `0`，Excel 版为「是」或「否」。
 
 | 类别 | 字段 |
 | --- | --- |
