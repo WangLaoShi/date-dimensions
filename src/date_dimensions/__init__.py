@@ -1,7 +1,7 @@
 """Date and time fields for analytics and Excel."""
 
 from calendar import monthrange
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 __all__ = ["time_features", "time_features_excel"]
@@ -15,6 +15,7 @@ def time_features(
     *,
     unit: str | None = None,
     include_cn_calendar: bool = False,
+    include_lunar: bool = False,
 ) -> dict[str, object]:
     """Return analytical fields in Asia/Shanghai local time.
 
@@ -43,9 +44,9 @@ def time_features(
         dt = dt.replace(tzinfo=shanghai)
     dt = dt.astimezone(shanghai)
 
-    date = dt.date()
-    iso = date.isocalendar()
-    weekday = date.weekday()
+    local_date = dt.date()
+    iso = local_date.isocalendar()
+    weekday = local_date.weekday()
     is_weekend = weekday >= 5
     days_in_month = monthrange(dt.year, dt.month)[1]
     minutes = dt.hour * 60 + dt.minute
@@ -66,12 +67,12 @@ def time_features(
         "is_weekend": int(is_weekend),
         "iso_year": iso.year,
         "weekofyear": iso.week,
-        "dayofyear": (date - date.replace(month=1, day=1)).days + 1,
-        "date_only": date,
+        "dayofyear": (local_date - local_date.replace(month=1, day=1)).days + 1,
+        "date_only": local_date,
         "hour_floor": hour_floor,
         "15min_floor": hour_floor.replace(minute=dt.minute // 15 * 15),
-        "week_start": date - timedelta(days=weekday),
-        "month_start": date.replace(day=1),
+        "week_start": local_date - timedelta(days=weekday),
+        "month_start": local_date.replace(day=1),
         "seconds_of_day": seconds,
         "minutes_of_day": minutes,
         "day_progress": seconds / 86_400,
@@ -100,14 +101,41 @@ def time_features(
                 "Install date-dimensions[cn] to enable the mainland China calendar"
             ) from exc
 
-        is_holiday, holiday_name = chinese_calendar.get_holiday_detail(date)
+        is_holiday, holiday_name = chinese_calendar.get_holiday_detail(local_date)
         is_workday = not is_holiday
         result.update(
             is_holiday=int(is_holiday),
             is_workday=int(is_workday),
-            is_in_lieu=int(chinese_calendar.is_in_lieu(date)),
+            is_in_lieu=int(chinese_calendar.is_in_lieu(local_date)),
             is_makeup_workday=int(is_weekend and is_workday),
             holiday_name=holiday_name if is_holiday else None,
+        )
+
+    if include_lunar:
+        if not date(1901, 2, 19) <= local_date <= date(2099, 12, 31):
+            raise ValueError("Lunar dates support 1901-02-19 through 2099-12-31")
+        try:
+            from cnlunar import Lunar
+        except ModuleNotFoundError as exc:
+            if exc.name != "cnlunar":
+                raise
+            raise ModuleNotFoundError(
+                "Install date-dimensions[lunar] to enable lunar fields"
+            ) from exc
+
+        lunar = Lunar(dt.replace(tzinfo=None), godType="8char")
+        result.update(
+            lunar_year=lunar.lunarYear,
+            lunar_month=lunar.lunarMonth,
+            lunar_day=lunar.lunarDay,
+            lunar_month_name=lunar.lunarMonthCn.removesuffix("大").removesuffix("小"),
+            lunar_day_name=lunar.lunarDayCn,
+            is_lunar_leap_month=int(lunar.isLunarLeapMonth),
+            zodiac=lunar.chineseYearZodiac,
+            year_pillar=lunar.year8Char,
+            month_pillar=lunar.month8Char,
+            day_pillar=lunar.day8Char,
+            hour_pillar=lunar.twohour8Char,
         )
 
     return result
@@ -118,9 +146,15 @@ def time_features_excel(
     *,
     unit: str | None = None,
     include_cn_calendar: bool = False,
+    include_lunar: bool = False,
 ) -> dict[str, object]:
     """Return Excel-ready values, with 是/否 flags and naive local datetimes."""
-    result = time_features(value, unit=unit, include_cn_calendar=include_cn_calendar)
+    result = time_features(
+        value,
+        unit=unit,
+        include_cn_calendar=include_cn_calendar,
+        include_lunar=include_lunar,
+    )
     for field, field_value in result.items():
         if field.startswith("is_") and field_value is not None:
             result[field] = "是" if field_value else "否"

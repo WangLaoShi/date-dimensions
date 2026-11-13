@@ -7,6 +7,7 @@
 ```sh
 pip install date-dimensions
 pip install "date-dimensions[cn]"  # 可选，中国大陆节假日和调休
+pip install "date-dimensions[lunar]"  # 可选，农历、生肖和四柱
 pip install "date-dimensions[tz]"  # 可选，供缺少系统时区数据的环境使用
 ```
 
@@ -67,6 +68,26 @@ assert makeup["is_workday"] == "是"
 assert makeup["is_makeup_workday"] == "是"
 ```
 
+## 农历、生肖和四柱
+
+安装 `date-dimensions[lunar]` 后，给任一函数传入 `include_lunar=True`。底层使用 [cnlunar](https://github.com/OPN48/cnlunar)，无需额外数据库。农历和四柱均按上海本地时间计算，支持公历 1901-02-19 至 2099-12-31。
+
+```python
+from date_dimensions import time_features_excel
+
+row = time_features_excel("2024-02-10 14:35:20", include_lunar=True)
+print("公历", row["date_only"])
+print("农历", f'{row["lunar_year"]}年{row["lunar_month_name"]}{row["lunar_day_name"]}')
+print("属相", row["zodiac"])
+print("八字", *(row[field] for field in ("year_pillar", "month_pillar", "day_pillar", "hour_pillar")))
+
+assert (row["lunar_year"], row["lunar_month"], row["lunar_day"]) == (2024, 1, 1)
+assert row["zodiac"] == "龙"
+assert row["is_lunar_leap_month"] == "否"
+```
+
+开启后增加 11 个字段。农历年月日保留整数，闰月在普通版中为 `1` 或 `0`，在 Excel 版中为「是」或「否」。如果同时需要大陆放假和补班，安装 `date-dimensions[cn,lunar]` 并同时开启两个参数。
+
 ## 写入 Excel
 
 如需直接生成 `.xlsx`，可额外安装 `openpyxl`（`pip install openpyxl`）。只获取字典时直接调用 `time_features_excel()` 即可。
@@ -99,7 +120,7 @@ workbook.save("date_dimensions.xlsx")
 
 ## 返回字段
 
-两个函数均返回以下 35 个字段。普通版的标记为 `1` 或 `0`，Excel 版为「是」或「否」。
+两个函数默认均返回以下 35 个字段。普通版的标记为 `1` 或 `0`，Excel 版为「是」或「否」。
 
 | 类别 | 字段 |
 | --- | --- |

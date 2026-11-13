@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "date-dimensions"
-version = "0.1.0"
+version = "0.2.0"
 description = "Extract date and time dimensions for analytics and Excel without pandas."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -14,6 +14,7 @@ keywords = ["datetime", "analytics", "excel", "calendar"]
 
 [project.optional-dependencies]
 cn = ["chinesecalendar"]
+lunar = ["cnlunar>=0.2.5,<0.3"]
 tz = ["tzdata"]
 
 [project.urls]
