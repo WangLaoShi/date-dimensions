@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "date-dimensions"
+version = "0.1.0"
+description = "Extract date and time dimensions for analytics and Excel without pandas."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+keywords = ["datetime", "analytics", "excel", "calendar"]
+
+[project.optional-dependencies]
+cn = ["chinesecalendar"]
+tz = ["tzdata"]
+
+[project.urls]
+Repository = "https://github.com/WangLaoShi/date-dimensions"
+Issues = "https://github.com/WangLaoShi/date-dimensions/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
